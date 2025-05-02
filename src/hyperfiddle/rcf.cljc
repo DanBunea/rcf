@@ -8,6 +8,7 @@
             #?(:clj [hyperfiddle.rcf.analyzer :as ana])
             #?(:clj [clojure.walk :as walk])
             #?(:clj [clojure.java.io :as io])
+            #?(:clj [lambdaisland.deep-diff2 :as d])
             [clojure.string :as str]
             [hyperfiddle.rcf.reporters]
             [hyperfiddle.rcf.queue]
@@ -168,18 +169,24 @@ convenience, defaults to println outside of tests context."}
     `(cljs.test/do-report ~m)
     `(impl/do-report ~m)))
 
+#?(:clj
+   (defn diff [[actual expected]]
+     (-> (d/diff expected actual)
+       d/minimize)))
+
 #?(:clj (defn- assert-= [menv msg form]
           (let [[_= & args] form
                 form        (cons '= (map impl/original-form args))]
             `(let [values# (list ~@args)
-                   result# (apply = values#)]
+                   result# (apply = values#)
+                   actual-fail# (when-not result# (diff values#))]
                (if result#
                  (do-report {:type     :hyperfiddle.rcf/pass
                              :message  ~msg,
                              :expected '~form
                              :actual   (cons '= values#)})
                  (do-report {:type     :hyperfiddle.rcf/fail
-                             :message  ~msg,
+                             :message  (str ~msg " Diff: " (with-out-str (clojure.pprint/pprint (diff values#))))
                              :expected '~form
                              :actual   (list '~'not (cons '~'= values#))}))
                (first values#)))))
